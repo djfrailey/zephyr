@@ -1,0 +1,13 @@
+{
+    "autoload": {
+        "files": [
+            "src/Helpers.php",
+            "src/Controller/GitLab.php",
+            "src/Model/File.php"
+        ]
+    },
+    "require": {
+        "amphp/aerys": "^0.4.3",
+        "phpunit/phpunit": "^5.6"
+    }
+}
