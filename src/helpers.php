@@ -6,16 +6,36 @@ use Aerys\Request;
 use Amp\Deferred;
 use Amp\Success;
 
+function getExecutionTime($reset = false)
+{
+    static $start;
+    $time = 0;
+
+    if (!$start || $reset) {
+        $start = microtime(true);
+    } else {
+        $time = round((microtime(true) - $start), 4);
+    }
+
+    return $time;
+}
+
 function decodeJsonBody(Request $req)
 {
-    $body = $req->getBody(10 * 1024);
+    $logger = $req->getLocalVar('logger');
+
+    $body = $req->getBody();
 
     $data = '';
     while (yield $body->valid()) {
-        $data .= $body->consume();
+        $string = $body->consume();
+
+        $data .= $string;
     }
 
-    return json_decode($data, true);
+    $data = json_decode($data, true);
+    
+    return $data;
 }
 
 function arrayGet(array $data, ...$keys)

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Zephyr\Controller\GitLab;
 
-use function Amp\resolve;
+use function Amp\all;
 use Aerys\{
     Request,
     Response,
@@ -15,13 +15,10 @@ use function Zephyr\Helpers\{
     arrayGet
 };
 use function Zephyr\Model\File\{
+    getUserFilenameById,
     getUserData,
     writeUserData
 };
-
-const CONFIG = [
-    'maxCommits' => 10
-];
 
 function action(Request $req, Response $res)
 {
@@ -59,23 +56,62 @@ function dispatch(string $action = "", array $data, Response $res)
 
 function consumePushEvent(Response $res, array $data) : \Generator
 { 
-    $values = yield from arrayGet($data, 'user_id', 'project_id', 'user_avatar', 'total_commits_count');
-
-    if (empty($values)) {
-        $res->setStatus(400)->end("Received incorrect parameters for event.");
-    }
+    $values = yield from arrayGet($data, 'user_id','total_commits_count');
 
     $today = strtotime('today');
-    $userFile = "user-" . $values['user_id'];
+    $userFile = getUserFilenameById($data['user_id']);
     $userData = yield getUserData($userFile);
 
     $todaysCommits = !empty($userData[$today]['commits']) ? $userData[$today]['commits'] : 0;
 
-    if ($todaysCommits < CONFIG['maxCommits']) {
-        $userData[$today]['commits'] += $values['total_commits_count'];
+    if (!isset($userData[$today]['commits'])) {
+        $userData[$today] = ['commits' => 0];
     }
 
-    $res->setStatus(200)->end(json_encode($userData));
+    $userData[$today]['commits'] += $values['total_commits_count'];
+    yield writeUserData($userFile, $userData);
+    
+    $res->setStatus(200)->end();
+}
 
-    wait(writeUserData($userFile, $userData));
+function consumeIssueEvent(Response $res, array $data) : \Generator
+{
+    $objectAttributes = yield from arrayGet($data, 'object_attributes');
+    $values = yield from arrayGet($objectAttributes, 'id', 'assignee_id', 'author_id', 'project_id', 'action');
+    $authorFile = getUserFilenameById($values['author_id']);
+    $assigneeFile = getUserFilenameById($values['assignee_id']);
+
+    $authorPromise = getUserData($authorFile);
+    $assigneePromise = getUserData($assigneeFile);
+
+    list($author, $assignee) = yield all([$authorPromise, $assigneePromise]);
+
+    $week = strtotime('week');
+
+    if (isset($author[$week]['issues']) === false) {
+        $author[$week] = ['issues' => ['raised' => 0, 'resolved' => 0, 'open' => []]];
+    }
+
+    if (isset($assignee[$week]['issues']) === false) {
+        $assignee[$week] = ['issues' => ['raised' => 0, 'resolved' => 0, 'open' => []]];
+    }
+
+    if ($values['action'] === 'open') {
+        $author[$week]['issues']['raised'] += 1;
+        $assignee[$week]['issues']['open'][$values['id']] = $values['project_id'];   
+    }
+
+    if ($values['action'] === 'closed') {
+        if (isset($assignee[$week]['issues']['open'][$values['id']])) {
+            unset($assignee[$week]['issues']['open'][$values['id']]);
+            $assignee[$week]['issues']['resolved'] += 1;
+        }
+    }
+
+    $authorWrite = writeUserData($authorFile, $author);
+    $assigneeWrite = writeUserData($assigneeFile, $assignee);
+
+    yield all([$authorWrite, $assigneeWrite]);
+
+    $res->setStatus(200)->end();
 }

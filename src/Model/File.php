@@ -4,6 +4,7 @@ declare (strict_types=1);
 
 namespace Zephyr\Model\File;
 
+use Amp\File\Handle;
 use \Exception;
 use function Amp\File\{ 
     exists,
@@ -13,7 +14,8 @@ use function Amp\File\{
 use Amp\{
     Deferred,
     Promise,
-    Success
+    Success,
+    function wait
 };
 
 const DATADIR = './src/Data/';
@@ -23,7 +25,7 @@ const DATADIR = './src/Data/';
  * @param  string $user
  * @return Promise
  */
-function getUserData(string $user) : Promise
+function getUserData(string $user)
 {
 
     $promisor = new Deferred();
@@ -31,24 +33,32 @@ function getUserData(string $user) : Promise
     $onOpen = function($error, $handle) use ($user, $promisor) {
 
         if ($error) {
-            $promisor->failed($error);
+            $promisor->fail($error);
+        } else {
+
+            $handle->read(10 * 1024)->when(function($error, $data) use ($promisor, $handle) {
+                if ($error) {
+                    $promisor->fail($error);
+                } else {
+
+                    if ($data) {
+                        $data = json_decode($data, true);
+                    }
+
+                    if (empty($data)) {
+                        $data = [];
+                    }
+                    
+                    $handle->close();
+
+                    $promisor->succeed($data);
+
+                }
+            });
         }
-
-        $data = yield $handle->read(10 * 1024);
-        yield $handle->close();
-
-        if ($data) {
-            $data = json_decode($data, true);
-        }
-
-        if (empty($data)) {
-            $data = [];
-        }
-
-        $promisor->succeed($data);
     };
 
-    openUserFile($user, 'r')->when($onOpen);
+    $open = openUserFile($user, 'r')->when($onOpen);
 
     return $promisor->promise();
 }
@@ -66,16 +76,22 @@ function writeUserData(string $user, $data) : Promise
     $onOpen = function($error, $handle) use ($user, $data, $promisor) {
 
         if ($error) {
-            $promisor->failed($error);
+            $promisor->fail($error);
+        } else {
+            $data = json_encode($data);
+            
+            $handle->write($data)->when(function($error, $result) use ($promisor, $handle) {
+
+                if ($error) {
+                    $promisor->fail($error);
+                } else {
+                    $handle->close();
+                    $promisor->succeed($result);
+                }
+
+
+            });
         }
-
-        $data = json_encode($data);
-        
-        $result = $handle->write($data);
-        
-        yield $handle->close();
-
-        $promisor->succeed($result);
     };
 
     openUserFile($user, 'w')->when($onOpen);
@@ -91,21 +107,21 @@ function writeUserData(string $user, $data) : Promise
 function createDataFile(string $filename) : Promise
 {
     $promisor = new Deferred;
-    $filename = rtrim($filename, '.json');
-    $filename .= '.json';
     $fullpath = DATADIR . $filename;
 
-    $onTouched = function($error, $result) use($promisor, $fullpath) {
+    $onTouched = function($error,$handle) use($promisor, $fullpath) {
         
         if ($error) {
             $promisor->fail($error);
-        }
+        } else {
 
-        $promisor->succeed($fullpath);
+            $handle->close();
+            $promisor->succeed($fullpath);
+
+        }
     };
     
-    $promise = touch($fullpath);
-    $promise->when($onTouched);
+    open($fullpath, 'w')->when($onTouched);
 
     return $promisor->promise();
 }
@@ -116,42 +132,48 @@ function createDataFile(string $filename) : Promise
  * @param  string $mode
  * @return Promise 
  */
-function openUserFile(string $user, string $mode) : Promise
+function openUserFile(string $user, string $mode)
 {
-    $user = rtrim($user, '.json');
-    $userFile = DATADIR . $user . '.json';
+    $userFile = DATADIR . $user;
 
     $promisor = new Deferred;
 
     $onOpen = function($error, $result) use ($promisor) {
         if ($error) {
-            $promisor->failed($openError);
+            $promisor->fail($error);
+        } else {
+            $promisor->succeed($result);
         }
-
-        $promisor->succeed($result);
     };
 
-    $onCreated = function($error, $result) use ($onOpen, $userFile, $mode) {
+    $onCreated = function($error, $result) use ($onOpen, $userFile, $mode, $promisor) {
         if ($error) {
-            throw new Exception($error);
-        }
-
-        open($userFile, $mode)->when($onOpen);
-    };
-
-    $onExists = function($error, $result) use ($onCreated, $onOpen, $user, $userFile, $mode) {
-        if ($error) {
-            throw new Exception($error);
-        }
-
-        if ($result === false) {
-            createDataFile($user)->when($onCreated);
+            $promisor->fail($error);
         } else {
             open($userFile, $mode)->when($onOpen);
+        }
+    };
+
+    $onExists = function($error, $result) use ($onCreated, $onOpen, $user, $userFile, $mode, $promisor) {
+        if ($error) {
+            $promisor->fail($error);
+        } else {
+            
+            if ($result === false) {
+                createDataFile($user)->when($onCreated);
+            } else {
+                open($userFile, $mode)->when($onOpen);
+            }
+        
         }
     };
 
     exists($userFile)->when($onExists);
 
     return $promisor->promise();
+}
+
+function getUserfilenameById(int $id) : String
+{
+    return "user-${id}.json";
 }
