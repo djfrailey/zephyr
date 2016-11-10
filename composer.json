@@ -1,7 +1,7 @@
 {
     "autoload": {
         "files": [
-            "src/Helpers.php",
+            "src/helpers.php",
             "src/Controller/GitLab.php",
             "src/Model/File.php"
         ]

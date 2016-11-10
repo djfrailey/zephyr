@@ -8,46 +8,42 @@ use function Amp\wait;
 class DataModelTest extends TestCase
 {
 
-    // protected function setUp()
-    // {
-    //     $reactor = Amp\reactor();
-    // }
 
-    // public function testCreatesDataFiles()
-    // {
-    //     Amp\run(function() {
-    //         $expectedPath = DATADIR . 'david.json';
-    //         $path = wait(Zephyr\Model\File\createDataFile('david'));
+    public function testCreatesDataFiles()
+    {
+        Amp\run(function() {
+            $expectedPath = DATADIR . 'david.json';
+            $path = yield Zephyr\Model\File\createDataFile('david');
             
-    //         $this->assertNotEmpty($path, "A path should be returned.");
-    //         $this->assertEquals($expectedPath, $path, "The path returned did not match the expected path.");
-    //     });
-    // }
+            $this->assertNotEmpty($path, "A path should be returned.");
+            $this->assertEquals($expectedPath, $path, "The path returned did not match the expected path.");
+        });
+    }
 
-    // /**
-    //  * @depends testCreatesDataFiles
-    //  */
-    // public function testOpensUserFiles()
-    // {
-    //     Amp\run(function() {
-    //         $handle = wait(Zephyr\Model\File\openUserFile('david2', 'w'));
-    //         $this->assertEquals(0, $handle->tell());
-    //         $handle->close();
-    //     });
-    // }
+    /**
+     * @depends testCreatesDataFiles
+     */
+    public function testOpensUserFiles()
+    {
+        Amp\run(function() {
+            $handle = yield Zephyr\Model\File\openUserFile('david2', 'w');
+            $this->assertEquals(0, $handle->tell());
+            $handle->close();
+        });
+    }
 
-    // /**
-    //  * @depends testCreatesDataFiles
-    //  */
-    // public function testGetsUserData()
-    // {
-    //     Amp\run(function() {
-    //         $data = wait(Zephyr\Model\File\getUserData('mock'));
+    /**
+     * @depends testCreatesDataFiles
+     */
+    public function testGetsUserData()
+    {
+        Amp\run(function() {
+            $data = yield Zephyr\Model\File\getUserData('mock');
 
-    //         $this->assertNotEmpty($data);
-    //         $this->assertEquals($data['name'], "MOCK");
-    //     });
-    // }
+            $this->assertNotEmpty($data);
+            $this->assertEquals($data['name'], "MOCK");
+        });
+    }
 
     
     public function testWritesUserData()
@@ -55,9 +51,6 @@ class DataModelTest extends TestCase
         $data = [
             "name" => "David"
         ];
-
-        $read = null;
-        $result = null;
 
         Amp\run(function() use ($data, &$read, &$result){ 
             $result = yield Zephyr\Model\File\writeUserData('david', $data);
