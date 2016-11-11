@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Zephyr\Controller\GitLab;
 
-use function Amp\all;
+use function Amp\{all, resolve};
 use Aerys\{
     Request,
     Response,
@@ -14,10 +14,9 @@ use function Zephyr\Helpers\{
     decodeJsonBody,
     arrayGet
 };
-use function Zephyr\Model\File\{
-    getUserFilenameById,
-    getUserData,
-    writeUserData
+use function Zephyr\Model\User\{
+    getUserByEmail,
+    createUser
 };
 
 function action(Request $req, Response $res)
@@ -56,62 +55,67 @@ function dispatch(string $action = "", array $data, Response $res)
 
 function consumePushEvent(Response $res, array $data) : \Generator
 { 
-    $values = yield from arrayGet($data, 'user_id','total_commits_count');
+    $values = yield from arrayGet($data, 'user_id', 'user_name', 'user_email', 'total_commits_count');
 
     $today = strtotime('today');
-    $userFile = getUserFilenameById($data['user_id']);
-    $userData = yield getUserData($userFile);
 
-    $todaysCommits = !empty($userData[$today]['commits']) ? $userData[$today]['commits'] : 0;
+    $user = yield resolve(getUserByEmail($values['user_email']));
 
-    if (!isset($userData[$today]['commits'])) {
-        $userData[$today] = ['commits' => 0];
+    if ($user == false) {
+        $user = yield resolve(createUser([
+            'email_address' => $values['user_email'],
+            'username' => $values['user_name'],
+            'name' => $values['user_name'],
+            'accounts' => [
+                [
+                    'account_identifier' => $values['user_id'],
+                    'account_type' => 'gitlab'
+                ]
+            ]
+        ]));
     }
-
-    $userData[$today]['commits'] += $values['total_commits_count'];
-    yield writeUserData($userFile, $userData);
     
-    $res->setStatus(200)->end();
+    $res->setStatus(200)->end(json_encode(compact('user')));
 }
 
-function consumeIssueEvent(Response $res, array $data) : \Generator
-{
-    $objectAttributes = yield from arrayGet($data, 'object_attributes');
-    $values = yield from arrayGet($objectAttributes, 'id', 'assignee_id', 'author_id', 'project_id', 'action');
-    $authorFile = getUserFilenameById($values['author_id']);
-    $assigneeFile = getUserFilenameById($values['assignee_id']);
+// function consumeIssueEvent(Response $res, array $data) : \Generator
+// {
+//     $objectAttributes = yield from arrayGet($data, 'object_attributes');
+//     $values = yield from arrayGet($objectAttributes, 'id', 'assignee_id', 'author_id', 'project_id', 'action');
+//     $authorFile = getUserFilenameById($values['author_id']);
+//     $assigneeFile = getUserFilenameById($values['assignee_id']);
 
-    $authorPromise = getUserData($authorFile);
-    $assigneePromise = getUserData($assigneeFile);
+//     $authorPromise = getUserData($authorFile);
+//     $assigneePromise = getUserData($assigneeFile);
 
-    list($author, $assignee) = yield all([$authorPromise, $assigneePromise]);
+//     list($author, $assignee) = yield all([$authorPromise, $assigneePromise]);
 
-    $week = strtotime('week');
+//     $week = strtotime('week');
 
-    if (isset($author[$week]['issues']) === false) {
-        $author[$week] = ['issues' => ['raised' => 0, 'resolved' => 0, 'open' => []]];
-    }
+//     if (isset($author[$week]['issues']) === false) {
+//         $author[$week] = ['issues' => ['raised' => 0, 'resolved' => 0, 'open' => []]];
+//     }
 
-    if (isset($assignee[$week]['issues']) === false) {
-        $assignee[$week] = ['issues' => ['raised' => 0, 'resolved' => 0, 'open' => []]];
-    }
+//     if (isset($assignee[$week]['issues']) === false) {
+//         $assignee[$week] = ['issues' => ['raised' => 0, 'resolved' => 0, 'open' => []]];
+//     }
 
-    if ($values['action'] === 'open') {
-        $author[$week]['issues']['raised'] += 1;
-        $assignee[$week]['issues']['open'][$values['id']] = $values['project_id'];   
-    }
+//     if ($values['action'] === 'open') {
+//         $author[$week]['issues']['raised'] += 1;
+//         $assignee[$week]['issues']['open'][$values['id']] = $values['project_id'];   
+//     }
 
-    if ($values['action'] === 'closed') {
-        if (isset($assignee[$week]['issues']['open'][$values['id']])) {
-            unset($assignee[$week]['issues']['open'][$values['id']]);
-            $assignee[$week]['issues']['resolved'] += 1;
-        }
-    }
+//     if ($values['action'] === 'closed') {
+//         if (isset($assignee[$week]['issues']['open'][$values['id']])) {
+//             unset($assignee[$week]['issues']['open'][$values['id']]);
+//             $assignee[$week]['issues']['resolved'] += 1;
+//         }
+//     }
 
-    $authorWrite = writeUserData($authorFile, $author);
-    $assigneeWrite = writeUserData($assigneeFile, $assignee);
+//     $authorWrite = writeUserData($authorFile, $author);
+//     $assigneeWrite = writeUserData($assigneeFile, $assignee);
 
-    yield all([$authorWrite, $assigneeWrite]);
+//     yield all([$authorWrite, $assigneeWrite]);
 
-    $res->setStatus(200)->end();
-}
+//     $res->setStatus(200)->end();
+// }

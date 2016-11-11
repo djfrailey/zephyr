@@ -5,6 +5,15 @@ use Aerys\Host;
 
 require_once(__DIR__ . '/vendor/autoload.php');
 
+$dotenv = new Dotenv\Dotenv(__DIR__);
+$dotenv->load();
+$dotenv->required([
+	"MYSQL_HOST",
+	"MYSQL_USER",
+	"MYSQL_PASSWORD",
+	"MYSQL_DATABASE"
+]);
+
 $routes = require_once('src/routes.php');
 
 (new Host)
