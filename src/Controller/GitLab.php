@@ -18,6 +18,7 @@ use function Zephyr\Model\User\{
     getUserByEmail,
     createUser
 };
+use \Throwable;
 
 function action(Request $req, Response $res)
 {
@@ -59,19 +60,45 @@ function consumePushEvent(Response $res, array $data) : \Generator
 
     $today = strtotime('today');
 
-    $user = yield resolve(getUserByEmail($values['user_email']));
+    // Attempt to resolve a user.
+    try {
+        $user = yield resolve(getUserByEmail($values['user_email']));
+    } catch (Throwable $e) {
+        $res->setStatus(500)->end(json_encode([
+            'error' => $e->getMessage()
+        ]));
+    }
 
+    // If the user does not already exist then attempt to create it.
     if ($user == false) {
-        $user = yield resolve(createUser([
-            'email_address' => $values['user_email'],
-            'username' => $values['user_name'],
-            'name' => $values['user_name'],
-            'accounts' => [
-                [
-                    'account_identifier' => $values['user_id'],
-                    'account_type' => 'gitlab'
+        try {
+            $user = yield resolve(createUser([
+                'email_address' => $values['user_email'],
+                'username' => $values['user_name'],
+                'name' => $values['user_name'],
+                'accounts' => [
+                    [
+                        'account_identifier' => $values['user_id'],
+                        'account_type' => 'gitlab'
+                    ]
                 ]
-            ]
+            ]));
+        } catch (Throwable $e) {
+            $res->setStatus(500)->end(json_encode([
+                'error' => $e->getMessage()
+            ]));
+        }
+    }
+
+    try {
+        $metricAdded = yield resolve(addMetric([
+            'user' => $user,
+            'value' => $values['total_commits_count'],
+            'type' => 'commit'
+        ]));
+    } catch (Throwable $e) {
+        $res->setStatus(500)->end(json_encode([
+            'error' => $e->getMessage()
         ]));
     }
     
