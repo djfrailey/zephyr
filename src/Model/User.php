@@ -27,7 +27,7 @@ function createUser(array $data)
 
         yield $statement->execute($data);
 
-        if (isset($data['accounts']) === false) {
+        if (isset($data['accounts']) === true) {
             foreach($data['accounts'] as $account) {
                 $account['user_email_address'] = $data['email_address'];
                 yield resolve(createUserAccount($account));
