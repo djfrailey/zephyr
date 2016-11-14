@@ -102,7 +102,7 @@ function consumePushEvent(Response $res, array $data) : \Generator
         ]));
     }
     
-    $res->setStatus(200)->end(json_encode(compact('user')));
+    $res->setStatus(200)->end();
 }
 
 // function consumeIssueEvent(Response $res, array $data) : \Generator
