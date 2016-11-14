@@ -4,7 +4,7 @@ namespace Zephyr\Model\User;
 
 use function Zephyr\Helpers\connectionPool;
 use function Zephyr\Model\Account\createUserAccount;
-use Amp\{Deferred, Promise, Failure, Success, function resolve};
+use Amp\{Deferred, Promise, Failure, Success, function resolve, function all};
 use \Exception;
 
 function createUser(array $data)
@@ -27,10 +27,13 @@ function createUser(array $data)
         $statement->execute($data);
 
         if (isset($data['accounts']) === true) {
+            $promises = [];
             foreach($data['accounts'] as $account) {
                 $account['user_email_address'] = $data['email_address'];
-                resolve(createUserAccount($account));
+                $promises[] = createUserAccount($account);
             }
+
+            yield all($promises);
         }
 
         $result = $data;
