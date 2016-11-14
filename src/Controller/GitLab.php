@@ -108,44 +108,59 @@ function consumePushEvent(Response $res, array $data) : \Generator
     $res->setStatus(200)->end();
 }
 
-// function consumeIssueEvent(Response $res, array $data) : \Generator
-// {
-//     $objectAttributes = yield from arrayGet($data, 'object_attributes');
-//     $values = yield from arrayGet($objectAttributes, 'id', 'assignee_id', 'author_id', 'project_id', 'action');
-//     $authorFile = getUserFilenameById($values['author_id']);
-//     $assigneeFile = getUserFilenameById($values['assignee_id']);
+function consumeIssueEvent(Response $res, array $data) : \Generator
+{
+    $action = $data['object_attributes']['action'];
+    $issuerId = $data['object_attributes']['author_id'];
+    $assigneeId = $data['object_attribues']['assignee_id'];
 
-//     $authorPromise = getUserData($authorFile);
-//     $assigneePromise = getUserData($assigneeFile);
+    list($issuer, $assignee) = yield all([
+        getUserByAccountId([
+            'id' => $issuerId,
+            'type' => 'gitlab'
+        ]),
+        getUserByAccountId([
+            'id' => $assigneeId,
+            'type' => 'gitlab'
+        ])
+    ]);
 
-//     list($author, $assignee) = yield all([$authorPromise, $assigneePromise]);
+    if ($action === 'open') {
 
-//     $week = strtotime('week');
+        try {
+            yield all([
+                addMetric([
+                    'user' => $issuer,
+                    'type' => 'authored_issue',
+                    'value' => 1
+                ]),
+                addMetric([
+                    'user' => $assignee,
+                    'type' => 'open_issue',
+                    'value' => 1
+                ])
+            ]);
+        } catch (Throwable $e) {
+            $res->setStatus(500)->end(json_encode([
+                'error' => $e->getMessage()
+            ]));
+        }
 
-//     if (isset($author[$week]['issues']) === false) {
-//         $author[$week] = ['issues' => ['raised' => 0, 'resolved' => 0, 'open' => []]];
-//     }
+    } else if ($action === 'closed') {
 
-//     if (isset($assignee[$week]['issues']) === false) {
-//         $assignee[$week] = ['issues' => ['raised' => 0, 'resolved' => 0, 'open' => []]];
-//     }
+        try {
+            yield resolve(addMetric([
+                'user' => $assignee,
+                'type' => 'resolved_issue',
+                'value' => 1
+            ]));
+        } catch (Throwable $e) {
+            $res->setStatus(500)->end(json_encode([
+                'error' => $e->getMessage()
+            ]));
+        }
 
-//     if ($values['action'] === 'open') {
-//         $author[$week]['issues']['raised'] += 1;
-//         $assignee[$week]['issues']['open'][$values['id']] = $values['project_id'];   
-//     }
-
-//     if ($values['action'] === 'closed') {
-//         if (isset($assignee[$week]['issues']['open'][$values['id']])) {
-//             unset($assignee[$week]['issues']['open'][$values['id']]);
-//             $assignee[$week]['issues']['resolved'] += 1;
-//         }
-//     }
-
-//     $authorWrite = writeUserData($authorFile, $author);
-//     $assigneeWrite = writeUserData($assigneeFile, $assignee);
-
-//     yield all([$authorWrite, $assigneeWrite]);
-
-//     $res->setStatus(200)->end();
-// }
+    }
+    
+    $res->setStatus(200)->end();
+}
