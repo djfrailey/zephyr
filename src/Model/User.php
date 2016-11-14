@@ -5,7 +5,6 @@ namespace Zephyr\Model\User;
 use function Zephyr\Helpers\connectionPool;
 use function Zephyr\Model\Account\createUserAccount;
 use Amp\{Deferred, Promise, Failure, Success, function resolve};
-use \stdClass;
 use \Exception;
 
 function createUser(array $data)
@@ -25,16 +24,15 @@ function createUser(array $data)
             $statement = yield connectionPool()->prepare("INSERT INTO users (email_address, username, name) VALUES (:email_address, :username, :name)");
         }
 
-        yield $statement->execute($data);
+        $statement->execute($data);
 
         if (isset($data['accounts']) === true) {
             foreach($data['accounts'] as $account) {
                 $account['user_email_address'] = $data['email_address'];
-                yield resolve(createUserAccount($account));
+                resolve(createUserAccount($account));
             }
         }
 
-        unset($data['accounts']);
         $result = $data;
     }
 
@@ -50,7 +48,7 @@ function getUserByEmail(string $email)
     }
 
     $set = yield $statement->execute([$email]);
-    $row = yield $set->fetchObject();
+    $row = yield $set->fetch();
 
     return $row;
 }
@@ -64,7 +62,7 @@ function getUserByUsername(string $username)
     }
 
     $set = yield $statement->execute([$username]);
-    $row = yield $set->fetchObject();
+    $row = yield $set->fetch();
 
     return $row;
 }
@@ -78,7 +76,7 @@ function getUserByName(string $name)
     }
 
     $set = yield $statement->execute([$name]);
-    $row = yield $set->fetchObject();
+    $row = yield $set->fetch();
 
     return $row;
 }

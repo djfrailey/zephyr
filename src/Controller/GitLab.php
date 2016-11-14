@@ -18,6 +18,9 @@ use function Zephyr\Model\User\{
     getUserByEmail,
     createUser
 };
+use function Zephyr\Model\Metric\{
+    addMetric
+};
 use \Throwable;
 
 function action(Request $req, Response $res)
@@ -102,7 +105,7 @@ function consumePushEvent(Response $res, array $data) : \Generator
         ]));
     }
     
-    $res->setStatus(200)->end(json_encode(compact('user')));
+    $res->setStatus(200)->end();
 }
 
 // function consumeIssueEvent(Response $res, array $data) : \Generator
