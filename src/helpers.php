@@ -2,11 +2,6 @@
 
 namespace Zephyr\Helpers;
 
-use Aerys\Request;
-use Amp\Deferred;
-use Amp\Success;
-use Amp\Mysql\Pool;
-
 /*
     UTILITY
 */
@@ -43,30 +38,6 @@ function decodeJsonBody(Request $req)
     return $data;
 }
 
-function arrayGet(array $data, ...$keys)
-{
-    $found = [];
-
-    foreach($keys as $search) {
-        foreach($data as $k => $v) {
-
-            if ($k === $search) {
-                $found[$search] = $v;
-            }
-
-            yield new Success();
-        }
-
-        yield new Success();
-    }
-
-    if (count($found) === 1) {
-        $found = reset($found);
-    }
-    
-    return $found;
-}
-
 function env($key = null, $default = null)
 {
     return $_ENV[$key] ?? $default;
@@ -83,7 +54,7 @@ function connectionPool()
         $password = env("MYSQL_PASSWORD");
         $database = env("MYSQL_DATABASE");
 
-        $pool = new Pool("host=$host;user=$user;pass=\"$password\";db=$database");
+        $pool = new Amp\Mysql\Pool("host=$host;user=$user;pass=$password;db=$database");
     }
 
     return $pool;
