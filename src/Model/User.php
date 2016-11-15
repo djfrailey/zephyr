@@ -83,3 +83,17 @@ function getUserByName(string $name)
 
     return $row;
 }
+
+function getUserByAccountId(int $id, string $type)
+{
+    static $statement;
+
+    if (isset($statement) === false) {
+        $statement = yield connectionPool()->prepare("SELECT users.* FROM account_lookup INNER JOIN users ON (users.email_address=account_lookup.user_email_address) WHERE account_lookup.account_identifier=:id AND account_lookup.account_type=:type");
+    }
+
+    $set = yield $statement->execute(compact('id', 'type'));
+    $row = yield $set->fetch();
+
+    return $row;
+}
