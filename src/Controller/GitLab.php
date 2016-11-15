@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Zephyr\Controller\GitLab;
 
+const TYPE = 'gitlab';
+
 use function Amp\{all, resolve};
 use Aerys\{
     Request,
@@ -16,6 +18,7 @@ use function Zephyr\Helpers\{
 };
 use function Zephyr\Model\User\{
     getUserByEmail,
+    getUserByAccountId,
     createUser
 };
 use function Zephyr\Model\Metric\{
@@ -26,7 +29,7 @@ use \Throwable;
 function action(Request $req, Response $res)
 {
     $data = yield from decodeJsonBody($req);
-    $actionType = yield from arrayGet($data, 'object_kind');
+    $actionType = $data['object_kind'];
 
     $res->addHeader('Content-Type', 'application/json');
     
@@ -64,46 +67,28 @@ function consumePushEvent(Response $res, array $data) : \Generator
     $today = strtotime('today');
 
     // Attempt to resolve a user.
-    try {
-        $user = yield resolve(getUserByEmail($values['user_email']));
-    } catch (Throwable $e) {
-        $res->setStatus(500)->end(json_encode([
-            'error' => $e->getMessage()
-        ]));
-    }
+    $user = yield resolve(getUserByEmail($values['user_email']));
 
     // If the user does not already exist then attempt to create it.
     if ($user == false) {
-        try {
-            $user = yield resolve(createUser([
-                'email_address' => $values['user_email'],
-                'username' => $values['user_name'],
-                'name' => $values['user_name'],
-                'accounts' => [
-                    [
-                        'account_identifier' => $values['user_id'],
-                        'account_type' => 'gitlab'
-                    ]
+        $user = yield resolve(createUser([
+            'email_address' => $values['user_email'],
+            'username' => $values['user_name'],
+            'name' => $values['user_name'],
+            'accounts' => [
+                [
+                    'account_identifier' => $values['user_id'],
+                    'account_type' => 'gitlab'
                 ]
-            ]));
-        } catch (Throwable $e) {
-            $res->setStatus(500)->end(json_encode([
-                'error' => $e->getMessage()
-            ]));
-        }
+            ]
+        ]));
     }
 
-    try {
-        $metricAdded = yield resolve(addMetric([
-            'user' => $user,
-            'value' => $values['total_commits_count'],
-            'type' => 'commit'
-        ]));
-    } catch (Throwable $e) {
-        $res->setStatus(500)->end(json_encode([
-            'error' => $e->getMessage()
-        ]));
-    }
+    $metricAdded = yield resolve(addMetric([
+        'user' => $user,
+        'value' => $values['total_commits_count'],
+        'type' => 'commit'
+    ]));
     
     $res->setStatus(200)->end();
 }
@@ -112,53 +97,35 @@ function consumeIssueEvent(Response $res, array $data) : \Generator
 {
     $action = $data['object_attributes']['action'];
     $issuerId = $data['object_attributes']['author_id'];
-    $assigneeId = $data['object_attribues']['assignee_id'];
+    $assigneeId = $data['object_attributes']['assignee_id'];
 
     list($issuer, $assignee) = yield all([
-        getUserByAccountId([
-            'id' => $issuerId,
-            'type' => 'gitlab'
-        ]),
-        getUserByAccountId([
-            'id' => $assigneeId,
-            'type' => 'gitlab'
-        ])
+        resolve(getUserByAccountId($issuerId, TYPE)),
+        resolve(getUserByAccountId($assigneeId, TYPE))
     ]);
 
     if ($action === 'open') {
 
-        try {
-            yield all([
-                addMetric([
-                    'user' => $issuer,
-                    'type' => 'authored_issue',
-                    'value' => 1
-                ]),
-                addMetric([
-                    'user' => $assignee,
-                    'type' => 'open_issue',
-                    'value' => 1
-                ])
-            ]);
-        } catch (Throwable $e) {
-            $res->setStatus(500)->end(json_encode([
-                'error' => $e->getMessage()
-            ]));
-        }
+        yield all([
+            resolve(addMetric([
+                'user' => $issuer,
+                'type' => 'authored_issue',
+                'value' => 1
+            ])),
+            resolve(addMetric([
+                'user' => $assignee,
+                'type' => 'open_issue',
+                'value' => 1
+            ]))
+        ]);
 
     } else if ($action === 'closed') {
 
-        try {
-            yield resolve(addMetric([
-                'user' => $assignee,
-                'type' => 'resolved_issue',
-                'value' => 1
-            ]));
-        } catch (Throwable $e) {
-            $res->setStatus(500)->end(json_encode([
-                'error' => $e->getMessage()
-            ]));
-        }
+        yield resolve(addMetric([
+            'user' => $assignee,
+            'type' => 'resolved_issue',
+            'value' => 1
+        ]));
 
     }
     
