@@ -4,26 +4,12 @@ declare(strict_types=1);
 
 namespace Zephyr\Controller\GitLab;
 
-use function Amp\{all, resolve};
-use Aerys\{
-    Request,
-    Response,
-    function wait
-};
-use function Zephyr\Helpers\{
-    decodeJsonBody,
-    arrayGet
-};
-use function Zephyr\Model\User\{
-    getUserByEmail,
-    createUser
-};
-use \Throwable;
+const TYPE = 'gitlab';
 
 function action(Request $req, Response $res)
 {
-    $data = yield from decodeJsonBody($req);
-    $actionType = yield from arrayGet($data, 'object_kind');
+    $data = yield from Zephyr\Helpers\decodeJsonBody($req);
+    $actionType = $data['object_kind'];
 
     $res->addHeader('Content-Type', 'application/json');
     
@@ -56,93 +42,114 @@ function dispatch(string $action = "", array $data, Response $res)
 
 function consumePushEvent(Response $res, array $data) : \Generator
 { 
-    $values = yield from arrayGet($data, 'user_id', 'user_name', 'user_email', 'total_commits_count');
-
-    $today = strtotime('today');
-
     // Attempt to resolve a user.
-    try {
-        $user = yield resolve(getUserByEmail($values['user_email']));
-    } catch (Throwable $e) {
-        $res->setStatus(500)->end(json_encode([
-            'error' => $e->getMessage()
-        ]));
-    }
+    $user = yield Amp\resolve(
+        Amp\Model\User\getUserByEmail($data['user_email'])
+    );
 
     // If the user does not already exist then attempt to create it.
     if ($user == false) {
-        try {
-            $user = yield resolve(createUser([
-                'email_address' => $values['user_email'],
-                'username' => $values['user_name'],
-                'name' => $values['user_name'],
+        $user = yield Amp\resolve(
+            Zephyr\Model\User\createUserPartial([
+                'email_address' => $data['user_email'],
+                'username' => $data['user_name'],
                 'accounts' => [
                     [
-                        'account_identifier' => $values['user_id'],
+                        'account_identifier' => $data['user_id'],
                         'account_type' => 'gitlab'
                     ]
                 ]
-            ]));
-        } catch (Throwable $e) {
-            $res->setStatus(500)->end(json_encode([
-                'error' => $e->getMessage()
-            ]));
-        }
+            ], TYPE)
+        );
     }
 
-    try {
-        $metricAdded = yield resolve(addMetric([
-            'user' => $user,
-            'value' => $values['total_commits_count'],
-            'type' => 'commit'
-        ]));
-    } catch (Throwable $e) {
-        $res->setStatus(500)->end(json_encode([
-            'error' => $e->getMessage()
-        ]));
-    }
+    $metricAdded = yield Amp\resolve(
+        Zephyr\User\Model\addMetric(
+            [
+                'user' => $user,
+                'value' => $data['total_commits_count'],
+                'type' => 'commit'
+            ]
+        )
+    );
     
     $res->setStatus(200)->end();
 }
 
-// function consumeIssueEvent(Response $res, array $data) : \Generator
-// {
-//     $objectAttributes = yield from arrayGet($data, 'object_attributes');
-//     $values = yield from arrayGet($objectAttributes, 'id', 'assignee_id', 'author_id', 'project_id', 'action');
-//     $authorFile = getUserFilenameById($values['author_id']);
-//     $assigneeFile = getUserFilenameById($values['assignee_id']);
+function consumeIssueEvent(Response $res, array $data) : \Generator
+{
+    $action = $data['object_attributes']['action'];
+    $issuerId = $data['object_attributes']['author_id'];
+    $assigneeId = $data['object_attributes']['assignee_id'];
 
-//     $authorPromise = getUserData($authorFile);
-//     $assigneePromise = getUserData($assigneeFile);
+    list($issuer, $assignee) = yield all([
+        Amp\resolve(
+            Zephyr\User\Model\getUserByAccountId($issuerId, TYPE)
+        ),
+        Amp\resolve(
+            Zephyr\User\Model\getUserByAccountId($assigneeId, TYPE)
+        )
+    ]);
 
-//     list($author, $assignee) = yield all([$authorPromise, $assigneePromise]);
+    $accountCreatePromises = [];
+    if ($issuer == false) {
+        $accountCreatePromises[] = Zephyr\Model\User\createUserPartial([
+            'accounts' => [
+                [
+                    'account_identifier' => $issuerId,
+                    'account_type' => 'gitlab'
+                ]
+            ]
+        ], TYPE);
+    }
 
-//     $week = strtotime('week');
+    if ($assignee == false) {
+        $accountCreatePromises[] = Zephyr\Model\User\createUserPartial([
+            'accounts' => [
+                [
+                    'account_identifier' => $assigneeId,
+                    'account_type' => 'gitlab'
+                ]
+            ]
+        ], TYPE);
+    }
 
-//     if (isset($author[$week]['issues']) === false) {
-//         $author[$week] = ['issues' => ['raised' => 0, 'resolved' => 0, 'open' => []]];
-//     }
+    if ($accountCreatePromises) {
+        list($issuer, $assignee) = yield Amp\all($accountCreatePromises);
+    }
 
-//     if (isset($assignee[$week]['issues']) === false) {
-//         $assignee[$week] = ['issues' => ['raised' => 0, 'resolved' => 0, 'open' => []]];
-//     }
+    if ($action === 'open') {
 
-//     if ($values['action'] === 'open') {
-//         $author[$week]['issues']['raised'] += 1;
-//         $assignee[$week]['issues']['open'][$values['id']] = $values['project_id'];   
-//     }
+        yield Amp\all([
+            Amp\resolve(
+                Zephyr\Model\Metric\addMetric(
+                [
+                    'user' => $issuer,
+                    'type' => 'authored_issue',
+                    'value' => 1
+                ]
+            )),
+            Amp\resolve(
+                Zephyr\Model\Metric\addMetric(
+                [
+                    'user' => $assignee,
+                    'type' => 'open_issue',
+                    'value' => 1
+                ]
+            ))
+        ]);
 
-//     if ($values['action'] === 'closed') {
-//         if (isset($assignee[$week]['issues']['open'][$values['id']])) {
-//             unset($assignee[$week]['issues']['open'][$values['id']]);
-//             $assignee[$week]['issues']['resolved'] += 1;
-//         }
-//     }
+    } else if ($action === 'closed') {
 
-//     $authorWrite = writeUserData($authorFile, $author);
-//     $assigneeWrite = writeUserData($assigneeFile, $assignee);
-
-//     yield all([$authorWrite, $assigneeWrite]);
-
-//     $res->setStatus(200)->end();
-// }
+        yield Amp\resolve(
+            Zephyr\Model\MetricaddMetric(
+            [
+                'user' => $assignee,
+                'type' => 'resolved_issue',
+                'value' => 1
+            ]
+        ));
+    }
+    
+    $res->setStatus(200)->end();
+}
