@@ -3,7 +3,6 @@
         "files": [
             "src/helpers.php",
             "src/Controller/GitLab.php",
-            "src/Model/File.php",
             "src/Model/User.php",
             "src/Model/Account.php",
             "src/Model/Metric.php",
