@@ -17,8 +17,9 @@ $dotenv->required([
 $routes = require_once('src/routes.php');
 
 (new Host)
-    ->expose('127.0.0.1', 80)
+    ->expose('127.0.0.1', 8080)
 	->name('localhost')
+    ->name('zephyr.dev')
     ->use(new class implements Bootable {
 		private $logger;
 

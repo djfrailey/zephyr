@@ -1,3 +1,0 @@
-FROM mysql:latest
-ADD ./custom.cnf /etc/mysql/conf.d/
-ADD ./schema.sql /docker-entrypoint-initdb.d/
