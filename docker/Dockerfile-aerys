@@ -1,0 +1,14 @@
+FROM php:zts
+ENV PHP_EXTRA_CONFIGURE_ARGS --with-pear
+RUN echo "deb http://ftp.debian.org/debian jessie-backports main" >> /etc/apt/sources.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends libuv1-dev \
+    && pecl install uv-0.1.1 \
+    && docker-php-ext-enable uv
+
+EXPOSE 80
+
+VOLUME /usr/share/nginx/html/
+
+WORKDIR /usr/share/nginx/html/
+CMD ["php", "vendor/bin/aeyrs", "-d", "-c", "server.php"]
