@@ -54,7 +54,7 @@ function consumePushEvent(Response $res, array $data) : \Generator
         $user = yield \Amp\resolve(
             \Zephyr\Model\User\createUserPartial([
                 'email_address' => $data['user_email'],
-                'username' => $data['user_name'],
+                'name' => $data['user_name'],
                 'accounts' => [
                     [
                         'account_identifier' => $data['user_id'],
