@@ -7,7 +7,7 @@ function buildEndpointUrl(string $url)
     static $endpoint;
 
     if (isset($endpoint) === false) {
-        $endpoint = rtrim(env('GITLAB_ENDPOINT'), '/');
+        $endpoint = rtrim(\Zephyr\Helpers\env('GITLAB_ENDPOINT'), '/');
     }
 
     return $endpoint . '/' . ltrim($url, '/');
