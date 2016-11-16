@@ -3,12 +3,14 @@
 declare(strict_types=1);
 
 namespace Zephyr\Controller\GitLab;
+use Aerys\Request;
+use Aerys\Response;
 
 const TYPE = 'gitlab';
 
 function action(Request $req, Response $res)
 {
-    $data = yield from Zephyr\Helpers\decodeJsonBody($req);
+    $data = yield from \Zephyr\Helpers\decodeJsonBody($req);
     $actionType = $data['object_kind'];
 
     $res->addHeader('Content-Type', 'application/json');
@@ -43,14 +45,14 @@ function dispatch(string $action = "", array $data, Response $res)
 function consumePushEvent(Response $res, array $data) : \Generator
 { 
     // Attempt to resolve a user.
-    $user = yield Amp\resolve(
-        Amp\Model\User\getUserByEmail($data['user_email'])
+    $user = yield \Amp\resolve(
+        \Zephyr\Model\User\getUserByEmail($data['user_email'])
     );
 
     // If the user does not already exist then attempt to create it.
     if ($user == false) {
-        $user = yield Amp\resolve(
-            Zephyr\Model\User\createUserPartial([
+        $user = yield \Amp\resolve(
+            \Zephyr\Model\User\createUserPartial([
                 'email_address' => $data['user_email'],
                 'username' => $data['user_name'],
                 'accounts' => [
@@ -63,8 +65,8 @@ function consumePushEvent(Response $res, array $data) : \Generator
         );
     }
 
-    $metricAdded = yield Amp\resolve(
-        Zephyr\User\Model\addMetric(
+    $metricAdded = yield \Amp\resolve(
+        \Zephyr\Model\Metric\addMetric(
             [
                 'user' => $user,
                 'value' => $data['total_commits_count'],
@@ -82,18 +84,18 @@ function consumeIssueEvent(Response $res, array $data) : \Generator
     $issuerId = $data['object_attributes']['author_id'];
     $assigneeId = $data['object_attributes']['assignee_id'];
 
-    list($issuer, $assignee) = yield all([
-        Amp\resolve(
-            Zephyr\User\Model\getUserByAccountId($issuerId, TYPE)
+    list($issuer, $assignee) = yield \Amp\all([
+        \Amp\resolve(
+            \Zephyr\User\Model\getUserByAccountId($issuerId, TYPE)
         ),
-        Amp\resolve(
-            Zephyr\User\Model\getUserByAccountId($assigneeId, TYPE)
+        \Amp\resolve(
+            \Zephyr\User\Model\getUserByAccountId($assigneeId, TYPE)
         )
     ]);
 
     $accountCreatePromises = [];
     if ($issuer == false) {
-        $accountCreatePromises[] = Zephyr\Model\User\createUserPartial([
+        $accountCreatePromises[] = \Zephyr\Model\User\createUserPartial([
             'accounts' => [
                 [
                     'account_identifier' => $issuerId,
@@ -104,7 +106,7 @@ function consumeIssueEvent(Response $res, array $data) : \Generator
     }
 
     if ($assignee == false) {
-        $accountCreatePromises[] = Zephyr\Model\User\createUserPartial([
+        $accountCreatePromises[] = \Zephyr\Model\User\createUserPartial([
             'accounts' => [
                 [
                     'account_identifier' => $assigneeId,
@@ -115,22 +117,22 @@ function consumeIssueEvent(Response $res, array $data) : \Generator
     }
 
     if ($accountCreatePromises) {
-        list($issuer, $assignee) = yield Amp\all($accountCreatePromises);
+        list($issuer, $assignee) = yield \Amp\all($accountCreatePromises);
     }
 
     if ($action === 'open') {
 
-        yield Amp\all([
-            Amp\resolve(
-                Zephyr\Model\Metric\addMetric(
+        yield \Amp\all([
+            \Amp\resolve(
+                \Zephyr\Model\Metric\addMetric(
                 [
                     'user' => $issuer,
                     'type' => 'authored_issue',
                     'value' => 1
                 ]
             )),
-            Amp\resolve(
-                Zephyr\Model\Metric\addMetric(
+            \Amp\resolve(
+                \Zephyr\Model\Metric\addMetric(
                 [
                     'user' => $assignee,
                     'type' => 'open_issue',
@@ -141,8 +143,8 @@ function consumeIssueEvent(Response $res, array $data) : \Generator
 
     } else if ($action === 'closed') {
 
-        yield Amp\resolve(
-            Zephyr\Model\MetricaddMetric(
+        yield \Amp\resolve(
+            \Zephyr\Model\Metric\addMetric(
             [
                 'user' => $assignee,
                 'type' => 'resolved_issue',

@@ -19,7 +19,7 @@ function addMetric(array $data)
     static $statement;
 
     if (isset($statement) === false) {
-        $statement = yield Zephyr\Helpers\connectionPool()->prepare("INSERT INTO metrics (email_address, metric_type, value, `date`) VALUES(:email, :type, :value, CURDATE())");
+        $statement = yield \Zephyr\Helpers\connectionPool()->prepare("INSERT INTO metrics (email_address, metric_type, value, `date`) VALUES(:email, :type, :value, CURDATE())");
     }
 
     $statement->execute([
