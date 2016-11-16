@@ -17,7 +17,7 @@ $dotenv->required([
 $routes = require_once('src/routes.php');
 
 (new Host)
-    ->expose('127.0.0.1', 80)
+    ->expose('0.0.0.0', 8081)
 	->name('localhost')
     ->use(new class implements Bootable {
 		private $logger;
