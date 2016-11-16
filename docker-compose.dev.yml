@@ -33,6 +33,7 @@ services:
             - "8081:8081"
         volumes: 
             - "./:/usr/share/nginx/html/"
+        command: php /usr/share/nginx/html/vendor/bin/aerys -d -c server.php
 volumes:
     zephyrdata:
         driver: local
