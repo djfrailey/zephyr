@@ -2,18 +2,49 @@
 
 namespace Zephyr\Api\Gitlab;
 
-const ENDPOINT_BASE = "https://git.clever.ly/api/v2";
-const PRIVATE_ACCESS_TOKEN = "";
+function buildEndpointUrl(string $url)
+{
+    static $endpoint;
+
+    if (isset($endpoint) === false) {
+        $endpoint = rtrim(env('GITLAB_ENDPOINT'), '/');
+    }
+
+    return $endpoint . '/' . ltrim($url, '/');
+}
 
 function getUserById(int $id)
 {
-    $url = ENDPOINT_BASE . '/users/' . $id;
-    $client = new Amp\Artax\Client();
-    $response = yield $client->request($url);
+    $url = buildEndpointUrl("/users/$id");
+    return (yield \Amp\Resolve(doRequest($url)));
+}
+
+function getUserBySearch(string $search)
+{
+    $search = urlencode($search);
+    $url = buildEndpointUrl("/users/?search=$search");
+    return (yield \Amp\Resolve(doRequest($url)));
+}
+
+function getUserByUsername(string $username)
+{   
+    $username = urlencode($username);
+    $url = buildEndpointUrl("/users/?username=$username");
+    return (yield \Amp\Resolve(doRequest($url)));
+}
+
+function doRequest(string $url)
+{
+    $client = new \Amp\Artax\Client();
+    $request = (new \Amp\Artax\Request)
+                ->setUri($url)
+                ->setHeader('PRIVATE-TOKEN', \Zephyr\Helpers\env('GITLAB_ACCESS_TOKEN'));
+
+    $response = yield $client->request($request);
 
     if ($response->getStatus() >= 400) {
         throw new \Exception($response->getReason());
     }
 
-    return json_decode($response->getBody(), true); 
+    return json_decode($response->getBody(), true);
 }
