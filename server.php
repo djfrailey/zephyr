@@ -30,4 +30,21 @@ $routes = require_once('src/routes.php');
 			$req->setLocalVar('logger', $this->logger);
 		}
 	})
+	->use(function(Aerys\Request $req, Aerys\Response $res) {
+	
+		// Log the request body to a file so we can look at it later.
+		$req->getBody()->watch(function($data) {			
+			$filename = "./requests/" . uniqid() . "-" . time();
+			\Amp\File\open($filename, 'w+')->when(function($e, $h) use ($data) {
+				if ($e) {
+
+				} else {
+					$h->write($data)->when(function($e, $r) use ($h) {
+						$h->close();
+					});
+				}
+			});
+		});	
+
+	})
     ->use($routes);
