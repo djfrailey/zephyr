@@ -6,9 +6,8 @@ RUN echo "deb http://ftp.debian.org/debian jessie-backports main" >> /etc/apt/so
     && pecl install uv-0.1.1 \
     && docker-php-ext-enable uv
 
-EXPOSE 80
+EXPOSE 8081
 
 VOLUME /usr/share/nginx/html/
 
 WORKDIR /usr/share/nginx/html/
-CMD ["php", "vendor/bin/aeyrs", "-d", "-c", "server.php"]
