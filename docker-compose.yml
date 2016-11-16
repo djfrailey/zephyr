@@ -6,9 +6,9 @@ services:
             dockerfile: Dockerfile-mysql
         env_file: .env
         ports:
-            - "3306:3306"
+            - "8091:3306"
         volumes:
-            - "zephyrdata:/var/lib/mysql"
+            - zephyrdata:/var/lib/mysql
         environment:
             - MYSQL_HOST=
     zephyrweb:
@@ -17,7 +17,7 @@ services:
             dockerfile: Dockerfile-nginx
         env_file: .env
         ports:
-            - "8080:80"
+            - "8080:8080"
         links:
             - zephyr
         volumes: 
@@ -29,7 +29,10 @@ services:
         env_file: .env
         links:
             - zephyrdb
+        ports:
+            - "8081:8081"
         volumes: 
             - "./:/usr/share/nginx/html/"
 volumes:
     zephyrdata:
+        driver: local
