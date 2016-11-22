@@ -16,21 +16,27 @@ function buildEndpointUrl(string $url)
 function getUserById(int $id)
 {
     $url = buildEndpointUrl("/users/$id");
-    return (yield \Amp\Resolve(doRequest($url)));
+    return (yield \Amp\resolve(doRequest($url)));
 }
 
 function getUserBySearch(string $search)
 {
     $search = urlencode($search);
     $url = buildEndpointUrl("/users/?search=$search");
-    return (yield \Amp\Resolve(doRequest($url)));
+    return (yield \Amp\resolve(doRequest($url)));
 }
 
 function getUserByUsername(string $username)
 {   
     $username = urlencode($username);
     $url = buildEndpointUrl("/users/?username=$username");
-    return (yield \Amp\Resolve(doRequest($url)));
+    return (yield \Amp\resolve(doRequest($url)));
+}
+
+function getCommit(int $projectId, string $hash)
+{
+    $url = buildEndpointUrl("projects/$projectId/repository/commits/$hash");
+    return (yield \Amp\resolve(doRequest($url)));
 }
 
 function doRequest(string $url)

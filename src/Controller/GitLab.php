@@ -45,7 +45,7 @@ function dispatch(string $action = "", array $data, Response $res)
 function consumePushEvent(Response $res, array $data) : \Generator
 { 
     $res->setStatus(200)->end();
-    
+
     // Attempt to resolve a user.
     $user = yield \Amp\resolve(
         \Zephyr\Model\User\getUserByEmail($data['user_email'])
@@ -67,7 +67,76 @@ function consumePushEvent(Response $res, array $data) : \Generator
         );
     }
 
-    $metricAdded = yield \Amp\resolve(
+    countUserCommit($user, $data['total_commits_count']);
+    
+    \Amp\resolve(
+        countUserFileChanges(
+            $user,
+            $data['project_id'],
+            array_reduce($data['commits'], 
+                function(array $hashes, $current) {
+                $hashes[] = $current['id'];
+            }, 
+            [])
+        )
+    );
+}
+
+function countUserFileChanges(array $user, int $projectId, array $hashes)
+{
+    $promises = [];
+    foreach($hashes as $hash) {
+        $promises[] = \Amp\resolve(
+            \Zephyr\Api\Gitlab\getCommit($projectId, $hash)
+        );
+    }
+
+    $resolved = yield \Amp\all($promises);
+
+    foreach($resolved as $commit) {
+
+        if (!empty($commit['stats']['additions'])) {
+            \Amp\resolve(
+                \Zephyr\Model\Metric\addMetric(
+                    [
+                        'user' => $user,
+                        'value' => $commit['stats']['additions'],
+                        'type' => 'line_addition'
+                    ]
+                )
+            );
+        }
+
+        if (!empty($commit['stats']['deletions'])) {
+            \Amp\resolve(
+                \Zephyr\Model\Metric\addMetric(
+                    [
+                        'user' => $user,
+                        'value' => $commit['stats']['deletions'],
+                        'type' => 'line_deletion'
+                    ]
+                )
+            );
+        }
+
+        if (!empty($commit['stats']['total'])) {
+            \Amp\resolve(
+                \Zephyr\Model\Metric\addMetric(
+                    [
+                        'user' => $user,
+                        'value' => $commit['stats']['total'],
+                        'type' => 'line_total'
+                    ]
+                )
+            );
+        }
+    }
+}
+
+function countUserCommit(array $user, int $totalCommitsCount)
+{
+    // Count initial commit.
+    \Amp\resolve(
         \Zephyr\Model\Metric\addMetric(
             [
                 'user' => $user,
