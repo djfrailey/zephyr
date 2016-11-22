@@ -3,3 +3,6 @@
 - [O] Calculate min/max/avg line changes per commit for all users
 - [O] Calculate min/max/avg line additions per commit per user
 - [O] Calculate min/max/avg line removals per commit per user
+
+# Views
+- [O] Re-write view logic to be async.
