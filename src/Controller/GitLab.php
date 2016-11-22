@@ -44,6 +44,8 @@ function dispatch(string $action = "", array $data, Response $res)
 
 function consumePushEvent(Response $res, array $data) : \Generator
 { 
+    $res->setStatus(200)->end();
+    
     // Attempt to resolve a user.
     $user = yield \Amp\resolve(
         \Zephyr\Model\User\getUserByEmail($data['user_email'])
@@ -74,8 +76,6 @@ function consumePushEvent(Response $res, array $data) : \Generator
             ]
         )
     );
-    
-    $res->setStatus(200)->end();
 }
 
 function consumeIssueEvent(Response $res, array $data) : \Generator
