@@ -30,3 +30,15 @@ function addMetric(array $data)
 
     return true;
 }
+
+function getTodayMetricAggregate(string $type)
+{
+    static $statement;
+
+    if (isset($statement) === false) {
+        $statement = yield \Zephyr\Helpers\connectionPool()->prepare("SELECT email_address, SUM(`value`) AS `sum` FROM metrics WHERE `date`=CURDATE() AND metric_type=:type GROUP BY email_address ORDER BY `sum` DESC");
+    }
+
+    $set = yield $statement->execute(compact('type'));
+    return (yield $set->fetchAll());
+}

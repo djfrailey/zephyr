@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Zephyr\Helpers;
 
 /*
@@ -58,4 +60,20 @@ function connectionPool()
     }
 
     return $pool;
+}
+
+function view(string $filename, array $someVariableNameThatWillNeverCollide = array()) : string
+{
+    $filename = "./src/View/" . rtrim($filename, '.php') . '.php';
+    
+    $data = "";
+
+    if (file_exists($filename)) {
+        extract($someVariableNameThatWillNeverCollide, EXTR_OVERWRITE);
+        ob_start();
+        include($filename);
+        $data = ob_get_clean();
+    }
+
+    return $data;
 }
