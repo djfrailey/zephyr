@@ -2,11 +2,6 @@
 
 namespace Zephyr\Helpers;
 
-use Aerys\Request;
-use Amp\Deferred;
-use Amp\Success;
-use Amp\Mysql\Pool;
-
 /*
     UTILITY
 */
@@ -25,7 +20,7 @@ function getExecutionTime($reset = false)
     return $time;
 }
 
-function decodeJsonBody(Request $req)
+function decodeJsonBody(\Aerys\Request $req)
 {
     $logger = $req->getLocalVar('logger');
 
@@ -83,7 +78,7 @@ function connectionPool()
         $password = env("MYSQL_PASSWORD");
         $database = env("MYSQL_DATABASE");
 
-        $pool = new Pool("host=$host;user=$user;pass=\"$password\";db=$database");
+        $pool = new \Amp\Mysql\Pool("host=$host;user=$user;pass=$password;db=$database");
     }
 
     return $pool;

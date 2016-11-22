@@ -1,2 +1,2 @@
 #!/bin/sh
-curl -w@"curl-format.txt" -XPOST -d@"PushEvent.json" http://zephyr.dev/gitlab/action
+curl -w@"curl-format.txt" -XPOST -d@"PushEvent.json" http://localhost:8080/gitlab/action

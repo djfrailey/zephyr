@@ -5,7 +5,7 @@ namespace Zephyr\Model\User;
 function fetchUserFromExtSource(array $data, string $how, string $source)
 {
     $sourceNamespace = ucwords(strtolower($source));
-    $namespace = "Zephyr\Api\${sourceNamespace}";
+    $namespace = "Zephyr\Api\\${sourceNamespace}";
     $method = null;
     $param = null;
     $userInformation = [];
@@ -13,11 +13,8 @@ function fetchUserFromExtSource(array $data, string $how, string $source)
     if ($how === 'username') {
         $method = "$namespace\getUserByUsername";
         $param = $data[$how];
-    } else if ($how === 'name') {
-        $method = "$namespace\getUserByName";
-        $param = $data[$how];
-    } else if ($how === 'email_address') {
-        $method = "$namespace\getUserByEmail";
+    } else if ($how === 'name' || $how === 'email') {
+        $method = "$namespace\getUserBySearch";
         $param = $data[$how];
     } else if ($how === 'accounts') {
         $method = "$namespace\getUserById";
@@ -34,11 +31,13 @@ function fetchUserFromExtSource(array $data, string $how, string $source)
     }
 
     if (function_exists($method)) {
-        $result = yield $method($param);
+        $result = yield \Amp\resolve($method($param));
 
-        if ($result == false) {
+        if (empty($result[0])) {
             throw new \Exception("Could not resolve user information. Type: $how");
         }
+
+        $result = reset($result);
 
         // Assume we're only dealing with Gitlab at the moment.
         $userInformation['username'] = $result['username'];
@@ -74,15 +73,17 @@ function createUserPartial(array $data, string $extSource)
         }
 
         if ($how) {
-            $userInformation = yield fetchUserFromExtSource($data, $how, $extSource);
+            $userInformation = yield \Amp\resolve(fetchUserFromExtSource($data, $how, $extSource));
 
             if ($userInformation == false) {
                 throw new \Exception("Could not create user from partial information.");
             }
 
-            $data = array_merge($data, $userInformation);
+            $data['username'] = $userInformation['username'];
+            $data['email_address'] = $userInformation['email_address'];
+            $data['name'] = $userInformation['name'];
 
-            yield createUser($data);
+            yield \Amp\resolve(createUser($data));
         }
     }
 
@@ -103,19 +104,20 @@ function createUser(array $data)
     } else {
 
         if (isset($statement) === false) {
-            $statement = yield Zephyr\Helpers\connectionPool()->prepare("INSERT INTO users (email_address, username, name) VALUES (:email_address, :username, :name)");
+            $statement = yield \Zephyr\Helpers\connectionPool()->prepare("INSERT INTO users (email_address, username, name) VALUES (:email_address, :username, :name)");
         }
 
-        $statement->execute($data);
+        yield $statement->execute($data);
 
         if (isset($data['accounts']) === true) {
+
             $promises = [];
             foreach($data['accounts'] as $account) {
                 $account['user_email_address'] = $data['email_address'];
-                $promises[] = Zephyr\Model\Account\createUserAccount($account);
+                $promises[] = \Amp\resolve(\Zephyr\Model\Account\createUserAccount($account));
             }
 
-            yield Amp\all($promises);
+            yield \Amp\all($promises);
         }
 
         $result = $data;
@@ -129,7 +131,7 @@ function getUserByEmail(string $email)
     static $statement;
 
     if (isset($statement) === false) {
-        $statement = yield Zephyr\Helpers\connectionPool()->prepare("SELECT * FROM users WHERE email_address=? LIMIT 1");
+        $statement = yield \Zephyr\Helpers\connectionPool()->prepare("SELECT * FROM users WHERE email_address=? LIMIT 1");
     }
 
     $set = yield $statement->execute([$email]);
@@ -157,7 +159,7 @@ function getUserByName(string $name)
     static $statement;
 
     if (isset($statement) === false) {
-        $statement = yield Zephyr\Helpers\connectionPool()->prepare("SELECT * FROM users WHERE name=? LIMIT 1");
+        $statement = yield \Zephyr\Helpers\connectionPool()->prepare("SELECT * FROM users WHERE name=? LIMIT 1");
     }
 
     $set = yield $statement->execute([$name]);
@@ -171,7 +173,7 @@ function getUserByAccountId(int $id, string $type)
     static $statement;
 
     if (isset($statement) === false) {
-        $statement = yield Zephyr\Helpers\connectionPool()->prepare("SELECT users.* FROM account_lookup INNER JOIN users ON (users.email_address=account_lookup.user_email_address) WHERE account_lookup.account_identifier=:id AND account_lookup.account_type=:type");
+        $statement = yield \Zephyr\Helpers\connectionPool()->prepare("SELECT users.* FROM account_lookup INNER JOIN users ON (users.email_address=account_lookup.user_email_address) WHERE account_lookup.account_identifier=:id AND account_lookup.account_type=:type");
     }
 
     $set = yield $statement->execute(compact('id', 'type'));

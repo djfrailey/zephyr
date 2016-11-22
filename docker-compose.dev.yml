@@ -1,0 +1,39 @@
+version: "2"
+services:
+    zephyrdb:
+        build:
+            context: ./docker
+            dockerfile: Dockerfile-mysql
+        env_file: .env
+        ports:
+            - "8091:3306"
+        volumes:
+            - zephyrdata:/var/lib/mysql
+        environment:
+            - MYSQL_HOST=
+    zephyrweb:
+        build: 
+            context: ./docker
+            dockerfile: Dockerfile-nginx
+        env_file: .env
+        ports:
+            - "8080:8080"
+        links:
+            - zephyr
+        volumes: 
+            - "./:/usr/share/nginx/html/"
+    zephyr:
+        build:
+            context: ./docker
+            dockerfile: Dockerfile-aerys
+        env_file: .env
+        links:
+            - zephyrdb
+        ports:
+            - "8081:8081"
+        volumes: 
+            - "./:/usr/share/nginx/html/"
+        command: php /usr/share/nginx/html/vendor/bin/aerys -d -c server.php
+volumes:
+    zephyrdata:
+        driver: local
