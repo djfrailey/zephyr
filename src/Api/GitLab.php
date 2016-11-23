@@ -46,9 +46,12 @@ function doRequest(string $url)
                 ->setUri($url)
                 ->setHeader('PRIVATE-TOKEN', \Zephyr\Helpers\env('GITLAB_ACCESS_TOKEN'));
 
+    error_log(\Zephyr\Helpers\env('GITLAB_ACCESS_TOKEN'));
+
     $response = yield $client->request($request);
 
     if ($response->getStatus() >= 400) {
+        error_log($url);
         throw new \Exception($response->getReason());
     }
 

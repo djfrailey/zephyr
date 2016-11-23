@@ -44,9 +44,7 @@ function dispatch(string $action = "", array $data, Response $res)
 
 function consumePushEvent(Response $res, array $data) : \Generator
 { 
-    $res->setStatus(200)->end();
-
-    // Attempt to resolve a user.
+     // Attempt to resolve a user.
     $user = yield \Amp\resolve(
         \Zephyr\Model\User\getUserByEmail($data['user_email'])
     );
@@ -67,19 +65,31 @@ function consumePushEvent(Response $res, array $data) : \Generator
         );
     }
 
-    countUserCommit($user, $data['total_commits_count']);
-    
-    \Amp\resolve(
-        countUserFileChanges(
-            $user,
-            $data['project_id'],
-            array_reduce($data['commits'], 
-                function(array $hashes, $current) {
-                $hashes[] = $current['id'];
-            }, 
-            [])
+    yield \Amp\all([
+        \Amp\resolve(
+                \Zephyr\Model\Metric\addMetric(
+                [
+                    'user' => $user,
+                    'value' => $data['total_commits_count'],
+                    'type' => 'commit'
+                ]
+            )
         )
-    );
+        ,
+        \Amp\resolve(countUserFileChanges(
+                $user,
+                $data['project_id'],
+                array_reduce($data['commits'], 
+                    function(array $hashes, $current) {
+                    $hashes[] = $current['id'];
+                    return $hashes;
+                }, 
+                [])
+            )
+        )
+    ]);
+
+    $res->setStatus(200)->end();
 }
 
 function countUserFileChanges(array $user, int $projectId, array $hashes)
@@ -92,6 +102,8 @@ function countUserFileChanges(array $user, int $projectId, array $hashes)
     }
 
     $resolved = yield \Amp\all($promises);
+
+    error_log(json_encode($resolved));
 
     foreach($resolved as $commit) {
 
@@ -131,20 +143,6 @@ function countUserFileChanges(array $user, int $projectId, array $hashes)
             );
         }
     }
-}
-
-function countUserCommit(array $user, int $totalCommitsCount)
-{
-    // Count initial commit.
-    \Amp\resolve(
-        \Zephyr\Model\Metric\addMetric(
-            [
-                'user' => $user,
-                'value' => $data['total_commits_count'],
-                'type' => 'commit'
-            ]
-        )
-    );
 }
 
 function consumeIssueEvent(Response $res, array $data) : \Generator
