@@ -66,8 +66,11 @@ function dashboard(\Aerys\Request $req, \Aerys\Response $res)
     ->stream(CSV($metricLabelEnum) . CRLF);
 
     foreach($dataByUser as $user => $data) {
+
+        list($name, $host) = explode('@', $user);
+
         $string = CSV([
-            $user,
+            $name,
             $data['commit'],
             $data['line_addition'],
             $data['line_deletion'],
