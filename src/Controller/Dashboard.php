@@ -49,14 +49,13 @@ function dashboard(\Aerys\Request $req, \Aerys\Response $res)
     $dataByUser = [];
 
     foreach($resolved as $key => $data) {
+        foreach($data as $metrics) {
+            if (isset($dataByUser[$metrics['email_address']]) === false) {
+                $dataByUser[$metrics['email_address']] = [];
+            }
 
-        $realData = reset($data);
-
-        if (isset($dataByUser[$realData['email_address']]) === false) {
-            $dataByUser[$realData['email_address']] = [];
+            $dataByUser[$metrics['email_address']][$key] = round($metrics['sum'], 2);
         }
-
-        $dataByUser[$realData['email_address']][$key] = round($realData['sum'], 2);
     }
 
     $rows = [];
